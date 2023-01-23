@@ -9,17 +9,17 @@ NUM_CHANNELS = 2
 
 class Printer:
     def __init__(self):
-        self.x_min = 10
-        self.x_max = 110
-        self.y_min = 10
-        self.y_max = 110
+        self.x_min = 10 # mm
+        self.x_max = 110 # mm
+        self.y_min = 10 # mm
+        self.y_max = 110 # mm
         self.a_steps_per_mm = 160
         self.b_steps_per_mm = 160
         self.is_corexy = True
         self.current_pos = [self.x_min, self.y_min]
         self.current_dir = [1, 1]
         self.max_speed = 2000  # mm per min
-        self.travel_speed = 1500
+        self.travel_speed = 1500 # mm per min
 
     def init_gcode(self):
         gcode = []
@@ -172,7 +172,7 @@ for i in range(len(timestamps)-1):
 def note_to_freq(note: int, base_freq=440):
     return base_freq*math.pow(2.0, (note-69)/12.0)
 
-NUM_CHANNELS = 2
+# Start to convert midi file to gcode
 num_runs = math.ceil(max_num_notes / NUM_CHANNELS)
 for r in range(num_runs):
     note_index = [r * NUM_CHANNELS, r * NUM_CHANNELS + 1]
@@ -201,3 +201,6 @@ for r in range(num_runs):
         for item in gcode_list:
             # write each item on a new line
             fp.write("%s\n" % item)
+
+print("Convert midi file to gcode compeleted!")
+print("Use it at your own risk!")
