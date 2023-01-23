@@ -1,30 +1,38 @@
+import configparser
 import math
 import collections
 import mido
 from mido import MidiFile
 
 # Configs
-MIDI_FILE_NAME = 'input.mid'
+CONFIG = configparser.ConfigParser()
+CONFIG.read('midi2gcode.config')
 NUM_CHANNELS = 2
 
+MIDI_FILE_NAME = CONFIG["MIDI"]["filename"]
+
 class Printer:
-    def __init__(self):
-        self.x_min = 10 # mm
-        self.x_max = 110 # mm
-        self.y_min = 10 # mm
-        self.y_max = 110 # mm
-        self.a_steps_per_mm = 160
-        self.b_steps_per_mm = 160
-        self.is_corexy = True
+    def __init__(self, config: configparser.ConfigParser):
+        self.x_min = float(config['PRINTER']['x_min'])
+        self.x_max = float(config['PRINTER']['x_max'])
+        self.y_min = float(config['PRINTER']['y_min'])
+        self.y_max = float(config['PRINTER']['y_max'])
+        self.z_height = float(config['PRINTER']['z_height'])
+        self.a_steps_per_mm = float(config['PRINTER']['a_steps_per_mm'])
+        self.b_steps_per_mm = float(config['PRINTER']['b_steps_per_mm'])
+        self.is_corexy = config['PRINTER'].getboolean('is_corexy')
+        self.max_speed = float(config['PRINTER']['max_speed'])
+        self.travel_speed = float(config['PRINTER']['travel_speed'])
+
+        # Current printer status
         self.current_pos = [self.x_min, self.y_min]
         self.current_dir = [1, 1]
-        self.max_speed = 2000  # mm per min
-        self.travel_speed = 1500 # mm per min
 
     def init_gcode(self):
         gcode = []
-        gcode.append('G28 X Y')
-        gcode.append(f'G1 X{self.x_min} Y{self.y_min} F{self.travel_speed}')
+        # Home X, Y and Z
+        gcode.append('G28 X Y Z')
+        gcode.append(f'G1 X{self.x_min} Y{self.y_min} Z{self.z_height} F{self.travel_speed}')
         gcode.append('G4 P1000')
         return gcode
 
@@ -80,7 +88,6 @@ class Printer:
             raise ValueError(f'delta_x {delta_x}')
 
 # Load Midi Files
-
 mid = MidiFile(MIDI_FILE_NAME)
 merged = mido.merge_tracks(mid.tracks)
 
@@ -176,7 +183,8 @@ def note_to_freq(note: int, base_freq=440):
 num_runs = math.ceil(max_num_notes / NUM_CHANNELS)
 for r in range(num_runs):
     note_index = [r * NUM_CHANNELS, r * NUM_CHANNELS + 1]
-    voron = Printer()
+    # Init a new printer for every run.
+    voron = Printer(config=CONFIG)
     gcode_list = []
     gcode_list.extend(voron.init_gcode())
     for start_end, notes in zip(start_end_timestamps, all_notes):
