@@ -3,9 +3,85 @@ import collections
 import mido
 from mido import MidiFile
 
+# Configs
+MIDI_FILE_NAME = 'input.mid'
+NUM_CHANNELS = 2
+
+class Printer:
+    def __init__(self):
+        self.x_min = 10
+        self.x_max = 110
+        self.y_min = 10
+        self.y_max = 110
+        self.a_steps_per_mm = 160
+        self.b_steps_per_mm = 160
+        self.is_corexy = True
+        self.current_pos = [self.x_min, self.y_min]
+        self.current_dir = [1, 1]
+        self.max_speed = 2000  # mm per min
+        self.travel_speed = 1500
+
+    def init_gcode(self):
+        gcode = []
+        gcode.append('G28 X Y')
+        gcode.append(f'G1 X{self.x_min} Y{self.y_min} F{self.travel_speed}')
+        gcode.append('G4 P1000')
+        return gcode
+
+    def move(self, x, y, feed_rate):
+        if x >= self.x_max or x <= self.x_min:
+            raise ValueError(f'x:{x}  y:{y}')
+        if y >= self.y_max or y <= self.y_min:
+            raise ValueError(f'x:{x}  y:{y}')
+
+        return f'G1 X{x} Y{y}  F{feed_rate}'
+
+    @classmethod
+    def freq2feedrate(cls, freq, steps_per_mm):
+        return 60*freq/steps_per_mm
+
+    @classmethod
+    def calculate_distance(cls, feedrate, duration):
+        return feedrate/60*duration
+
+    def freq2gcode(self, freqs, duration_s):
+        if len(freqs) > 2:
+            raise ValueError()
+        if len(freqs) == 0:
+            return f'G4 P{duration_s*1000}'
+        if len(freqs) == 1:
+            feed_rate_a = self.freq2feedrate(freqs[0], self.a_steps_per_mm)
+            feed_rate_b = 0
+        else:
+            feed_rate_a = self.freq2feedrate(freqs[0], self.a_steps_per_mm)
+            feed_rate_b = self.freq2feedrate(freqs[1], self.b_steps_per_mm)
+        delta_a = self.calculate_distance(feed_rate_a, duration_s)
+        delta_b = self.calculate_distance(feed_rate_b, duration_s)
+        if self.is_corexy:
+            delta_x = (delta_a + delta_b)/2 * self.current_dir[0]
+            delta_y = (delta_b - delta_a)/2 * self.current_dir[1]
+        else:
+            delta_x = delta_a * self.current_dir[0]
+            delta_y = delta_b * self.current_dir[1]
+        new_x = self.current_pos[0] + delta_x
+        if new_x >= self.x_max or new_x <= self.x_min:
+            new_x = self.current_pos[0] - delta_x
+            self.current_dir[0] = - self.current_dir[0]
+        new_y = self.current_pos[1] + delta_y
+        if new_y >= self.y_max or new_y <= self.y_min:
+            new_y = self.current_pos[1] - delta_y
+            self.current_dir[1] = - self.current_dir[1]
+        feed_rate = math.sqrt(delta_x*delta_x + delta_y*delta_y)/duration_s*60
+        self.current_pos = [new_x, new_y]
+        try:
+            moves = self.move(new_x, new_y, feed_rate)
+            return moves
+        except:
+            raise ValueError(f'delta_x {delta_x}')
+
 # Load Midi Files
-file_name = 'input.mid'
-mid = MidiFile(file_name)
+
+mid = MidiFile(MIDI_FILE_NAME)
 merged = mido.merge_tracks(mid.tracks)
 
 # Read Tempo from the file.
@@ -96,85 +172,10 @@ for i in range(len(timestamps)-1):
 def note_to_freq(note: int, base_freq=440):
     return base_freq*math.pow(2.0, (note-69)/12.0)
 
-
-class Printer:
-    def __init__(self):
-        self.x_min = 10
-        self.x_max = 110
-        self.y_min = 10
-        self.y_max = 110
-        self.a_steps_per_mm = 160
-        self.b_steps_per_mm = 160
-        self.is_corexy = True
-        self.current_pos = [self.x_min, self.y_min]
-        self.current_dir = [1, 1]
-        self.max_speed = 2000  # mm per min
-        self.travel_speed = 1500
-
-    def init_gcode(self):
-        gcode = []
-        gcode.append('G28 X Y')
-        gcode.append(f'G1 X{self.x_min} Y{self.y_min} F{self.travel_speed}')
-        gcode.append('G4 P1000')
-        return gcode
-
-    def move(self, x, y, feed_rate):
-        if x >= self.x_max or x <= self.x_min:
-            raise ValueError(f'x:{x}  y:{y}')
-        if y >= self.y_max or y <= self.y_min:
-            raise ValueError(f'x:{x}  y:{y}')
-
-        return f'G1 X{x} Y{y}  F{feed_rate}'
-
-    @classmethod
-    def freq2feedrate(cls, freq, steps_per_mm):
-        return 60*freq/steps_per_mm
-
-    @classmethod
-    def calculate_distance(cls, feedrate, duration):
-        return feedrate/60*duration
-
-    def freq2gcode(self, freqs, duration_s):
-        if len(freqs) > 2:
-            raise ValueError()
-        if len(freqs) == 0:
-            return f'G4 P{duration_s*1000}'
-        if len(freqs) == 1:
-            feed_rate_a = self.freq2feedrate(freqs[0], self.a_steps_per_mm)
-            feed_rate_b = 0
-        else:
-            feed_rate_a = self.freq2feedrate(freqs[0], self.a_steps_per_mm)
-            feed_rate_b = self.freq2feedrate(freqs[1], self.b_steps_per_mm)
-        delta_a = self.calculate_distance(feed_rate_a, duration_s)
-        delta_b = self.calculate_distance(feed_rate_b, duration_s)
-        if self.is_corexy:
-            delta_x = (delta_a + delta_b)/2 * self.current_dir[0]
-            delta_y = (delta_b - delta_a)/2 * self.current_dir[1]
-        else:
-            delta_x = delta_a * self.current_dir[0]
-            delta_y = delta_b * self.current_dir[1]
-        new_x = self.current_pos[0] + delta_x
-        if new_x >= self.x_max or new_x <= self.x_min:
-            new_x = self.current_pos[0] - delta_x
-            self.current_dir[0] = - self.current_dir[0]
-        new_y = self.current_pos[1] + delta_y
-        if new_y >= self.y_max or new_y <= self.y_min:
-            new_y = self.current_pos[1] - delta_y
-            self.current_dir[1] = - self.current_dir[1]
-        feed_rate = math.sqrt(delta_x*delta_x + delta_y*delta_y)/duration_s*60
-        self.current_pos = [new_x, new_y]
-        try:
-            moves = self.move(new_x, new_y, feed_rate)
-            return moves
-        except:
-            print(freqs, duration_s)
-            raise ValueError(f'delta_x {delta_x}')
-
-
-num_channels = 2
-num_runs = math.ceil(max_num_notes / num_channels)
+NUM_CHANNELS = 2
+num_runs = math.ceil(max_num_notes / NUM_CHANNELS)
 for r in range(num_runs):
-    note_index = [r * num_channels, r * num_channels + 1]
+    note_index = [r * NUM_CHANNELS, r * NUM_CHANNELS + 1]
     voron = Printer()
     gcode_list = []
     gcode_list.extend(voron.init_gcode())
@@ -196,7 +197,7 @@ for r in range(num_runs):
                 duration -= 5.0
             gcode_list.append(voron.freq2gcode(freqs, duration))
 
-    with open(f'{file_name[:-4]}_{r}.gcode', 'w') as fp:
+    with open(f'{MIDI_FILE_NAME[:-4]}_{r}.gcode', 'w') as fp:
         for item in gcode_list:
             # write each item on a new line
             fp.write("%s\n" % item)
