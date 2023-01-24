@@ -1,5 +1,7 @@
 `midi2gcode` 是一个把 MIDI 文件转换成 3D 打印机能够读取的 Gcode 开源软件。
 
+使用效果展示：《最伟大的作品》https://www.bilibili.com/video/BV1vd4y1M7er/
+
 它的主要特点是
 
 - 支持同时使用打印机的 X 和 Y 轴
